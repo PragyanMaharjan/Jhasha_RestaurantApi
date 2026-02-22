@@ -1,0 +1,269 @@
+const User = require('../models/User');
+const { generateToken, generateResetToken } = require('../utils/helpers');
+const { sendPasswordResetEmail, sendWelcomeEmail } = require('../utils/emailService');
+const crypto = require('crypto');
+
+/**
+ * Register a new user
+ * @route POST /api/auth/register
+ * @description Creates a new user account with the provided information
+ * @param {Request} req - Express request object containing user registration data
+ * @param {Response} res - Express response object
+ * @param {NextFunction} next - Express next middleware function
+ * @returns {Promise<void>} Returns JWT token and user object
+ * @throws {400} If passwords don't match or email already exists
+ */
+exports.register = async (req, res, next) => {
+  try {
+    const { name, email, phone, password, confirmPassword } = req.body;
+
+    if (password !== confirmPassword) {
+      return res.status(400).json({ message: 'Passwords do not match' });
+    }
+
+    let user = await User.findOne({ email });
+    if (user) {
+      return res.status(400).json({ message: 'Email already registered' });
+    }
+
+    const userData: any = {
+      name,
+      email,
+      phone,
+      password
+    };
+
+    // Add profile image if uploaded
+    if (req.file) {
+      userData.profileImage = req.file.path;
+    }
+
+    user = new User(userData);
+
+    await user.save();
+
+    // Send welcome email (non-blocking)
+    sendWelcomeEmail(user.email, user.name).catch(err => 
+      console.error('Failed to send welcome email:', err)
+    );
+
+    const token = generateToken(user._id, user.role);
+
+    res.status(201).json({
+      message: 'User registered successfully',
+      token,
+      user: user.toJSON()
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * User login
+ * @route POST /api/auth/login
+ * @description Authenticates user and returns JWT token
+ * @param {Request} req - Express request object containing email and password
+ * @param {Response} res - Express response object
+ * @param {NextFunction} next - Express next middleware function
+ * @returns {Promise<void>} Returns JWT token and user object
+ * @throws {400} If email or password is missing
+ * @throws {401} If credentials are invalid or account is inactive
+ */
+exports.login = async (req, res, next) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
+    }
+
+    // Hardcoded Admin Credentials
+    if (email === 'admin@gmail.com' && password === 'admin123') {
+      const adminToken = generateToken('admin-id', 'admin');
+      return res.status(200).json({
+        message: 'Admin login successful',
+        token: adminToken,
+        user: {
+          _id: 'admin-id',
+          name: 'Admin',
+          email: 'admin@gmail.com',
+          role: 'admin',
+          isActive: true
+        }
+      });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    const isPasswordMatch = await user.matchPassword(password);
+    if (!isPasswordMatch) {
+      return res.status(401).json({ message: 'Invalid email or password' });
+    }
+
+    const token = generateToken(user._id, user.role);
+
+    res.status(200).json({
+      message: 'Login successful',
+      token,
+      user: user.toJSON()
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Request password reset
+ * @route POST /api/auth/forgot-password
+ * @description Generates reset token and sends password reset email
+ * @param {Request} req - Express request object containing user email
+ * @param {Response} res - Express response object
+ * @param {NextFunction} next - Express next middleware function
+ * @returns {Promise<void>} Returns success message
+ * @throws {400} If email is missing
+ */
+exports.forgotPassword = async (req, res, next) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      // Return success even if user not found (security best practice)
+      return res.status(200).json({ message: 'If an account exists, a password reset email has been sent' });
+    }
+
+    const resetToken = generateResetToken();
+    const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+    user.resetPasswordToken = resetTokenHash;
+    user.resetPasswordExpire = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    await user.save();
+
+    // Send password reset email (non-blocking)
+    try {
+      await sendPasswordResetEmail(user.email, resetToken, user.name);
+    } catch (emailError) {
+      console.error('Email sending failed:', emailError.message);
+      // Continue even if email fails - token is still saved in database
+    }
+
+    res.status(200).json({ message: 'Password reset email sent successfully' });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    next(error);
+  }
+};
+
+/**
+ * Reset user password
+ * @route POST /api/auth/reset-password
+ * @description Resets user password using valid reset token
+ * @param {Request} req - Express request object containing reset token and new password
+ * @param {Response} res - Express response object
+ * @param {NextFunction} next - Express next middleware function
+ * @returns {Promise<void>} Returns success message
+ * @throws {400} If passwords don't match or token is invalid/expired
+ */
+exports.resetPassword = async (req, res, next) => {
+  try {
+    const { resetToken, newPassword, confirmPassword } = req.body;
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ message: 'Passwords do not match' });
+    }
+
+    const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+
+    const user = await User.findOne({
+      resetPasswordToken: resetTokenHash,
+      resetPasswordExpire: { $gt: Date.now() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired reset token' });
+    }
+
+    user.password = newPassword;
+    user.resetPasswordToken = undefined;
+    user.resetPasswordExpire = undefined;
+    await user.save();
+
+    res.status(200).json({ message: 'Password reset successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Get authenticated user profile
+ * @route GET /api/auth/profile
+ * @description Retrieves the profile of the authenticated user
+ * @param {Request} req - Express request object with authenticated user
+ * @param {Response} res - Express response object
+ * @param {NextFunction} next - Express next middleware function
+ * @returns {Promise<void>} Returns user profile object
+ * @throws {404} If user not found
+ * @access Private
+ */
+exports.getUserProfile = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.status(200).json({ user: user.toJSON() });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Update authenticated user profile
+ * @route PUT /api/auth/profile
+ * @description Updates user profile information
+ * @param {Request} req - Express request object with profile data and optional image
+ * @param {Response} res - Express response object
+ * @param {NextFunction} next - Express next middleware function
+ * @returns {Promise<void>} Returns updated user object
+ * @throws {404} If user not found
+ * @access Private
+ */
+exports.updateUserProfile = async (req, res, next) => {
+  try {
+    const { name, phone, address, city, zipCode } = req.body;
+
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (name) user.name = name;
+    if (phone) user.phone = phone;
+    if (address) user.address = address;
+    if (city) user.city = city;
+    if (zipCode) user.zipCode = zipCode;
+
+    if (req.file) {
+      user.profileImage = req.file.filename;
+    }
+
+    await user.save();
+
+    res.status(200).json({
+      message: 'Profile updated successfully',
+      user: user.toJSON()
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export {};
