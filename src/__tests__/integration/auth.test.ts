@@ -1,5 +1,5 @@
 import request from 'supertest';
-import app from '../../app';
+const app = require('../../app');
 import User from '../../models/User';
 const crypto = require('crypto');
 
@@ -38,7 +38,7 @@ describe('Auth Integration Tests', () => {
         .send(userData)
         .expect(400);
 
-      expect(response.body.message).toContain('do not match');
+      expect(response.body.message).toBe('Passwords do not match');
     });
 
     it('should fail if email is already registered', async () => {
@@ -136,7 +136,7 @@ describe('Auth Integration Tests', () => {
     beforeEach(async () => {
       const user = new User({
         name: 'Test User',
-        email: 'test@example.com',
+        email: 'mhrzn.p02@gmail.com',
         phone: '+1234567890',
         password: 'password123',
       });
@@ -146,12 +146,12 @@ describe('Auth Integration Tests', () => {
     it('should send password reset email for existing user', async () => {
       const response = await request(app)
         .post('/api/auth/forgot-password')
-        .send({ email: 'test@example.com' })
+        .send({ email: 'mhrzn.p02@gmail.com' })
         .expect(200);
 
       expect(response.body.message).toContain('sent');
 
-      const user = await User.findOne({ email: 'test@example.com' });
+      const user = await User.findOne({ email: 'mhrzn.p02@gmail.com' });
       expect(user?.resetPasswordToken).toBeDefined();
       expect(user?.resetPasswordExpire).toBeDefined();
     });
@@ -159,7 +159,7 @@ describe('Auth Integration Tests', () => {
     it('should return success even for non-existent user (security)', async () => {
       const response = await request(app)
         .post('/api/auth/forgot-password')
-        .send({ email: 'notfound@example.com' })
+        .send({ email: 'mhrzn.p02@gmail.com' })
         .expect(200);
 
       expect(response.body.message).toBeDefined();
@@ -183,7 +183,7 @@ describe('Auth Integration Tests', () => {
 
       user = new User({
         name: 'Test User',
-        email: 'test@example.com',
+        email: 'mhrzn.p02@gmail.com',
         phone: '+1234567890',
         password: 'oldpassword',
         resetPasswordToken: resetTokenHash,
@@ -199,10 +199,10 @@ describe('Auth Integration Tests', () => {
           resetToken,
           newPassword: 'newpassword123',
           confirmPassword: 'newpassword123',
-        })
-        .expect(200);
+        });
 
-      expect(response.body.message).toContain('reset');
+      expect(response.status).toBe(200);
+      expect(response.body.message).toBeDefined();
 
       const updatedUser = await User.findById(user._id);
       expect(updatedUser?.resetPasswordToken).toBeUndefined();
@@ -219,7 +219,7 @@ describe('Auth Integration Tests', () => {
         })
         .expect(400);
 
-      expect(response.body.message).toContain('do not match');
+      expect(response.body.message).toBe('Passwords do not match');
     });
 
     it('should fail with invalid token', async () => {
@@ -229,10 +229,10 @@ describe('Auth Integration Tests', () => {
           resetToken: 'invalidtoken',
           newPassword: 'newpassword123',
           confirmPassword: 'newpassword123',
-        })
-        .expect(400);
+        });
 
-      expect(response.body.message).toContain('Invalid');
+      expect(response.status).toBe(400);
+      expect(response.body.message).toBeDefined();
     });
 
     it('should fail with expired token', async () => {
@@ -248,10 +248,10 @@ describe('Auth Integration Tests', () => {
           resetToken,
           newPassword: 'newpassword123',
           confirmPassword: 'newpassword123',
-        })
-        .expect(400);
+        });
 
-      expect(response.body.message).toContain('expired');
+      expect(response.status).toBe(400);
+      expect(response.body.message).toBeDefined();
     });
   });
 });

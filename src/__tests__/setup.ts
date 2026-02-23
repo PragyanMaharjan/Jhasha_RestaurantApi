@@ -1,19 +1,27 @@
 // Test setup file
 import mongoose from 'mongoose';
+import { MongoMemoryServer } from 'mongodb-memory-server';
 
-jest.setTimeout(30000);
+let mongoServer: MongoMemoryServer;
+
+// Set NODE_ENV to test to skip email sending
+process.env.NODE_ENV = 'test';
+
+jest.setTimeout(60000);
 
 beforeAll(async () => {
-    // Connect to test database
-    const mongoUri = process.env.MONGODB_TEST_URI || 'mongodb://localhost:27017/restaurant-test';
+    // Start in-memory MongoDB instance
+    mongoServer = await MongoMemoryServer.create();
+    const mongoUri = mongoServer.getUri();
     await mongoose.connect(mongoUri);
-}, 30000);
+}, 60000);
 
 afterAll(async () => {
     // Clean up and disconnect
     await mongoose.connection.dropDatabase();
     await mongoose.connection.close();
-}, 30000);
+    await mongoServer.stop();
+}, 60000);
 
 afterEach(async () => {
     // Clear all collections after each test

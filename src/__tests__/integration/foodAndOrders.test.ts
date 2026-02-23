@@ -1,5 +1,5 @@
 import request from 'supertest';
-import app from '../../app';
+const app = require('../../app');
 import Food from '../../models/Food';
 import Order from '../../models/Order';
 import User from '../../models/User';
@@ -222,10 +222,10 @@ describe('Food & Order Integration Tests', () => {
       });
     });
 
-    describe('GET /api/orders/my-orders', () => {
+    describe('GET /api/orders (user orders)', () => {
       it('should get user orders', async () => {
         const response = await request(app)
-          .get('/api/orders/my-orders')
+          .get('/api/orders')
           .set('Authorization', `Bearer ${userToken}`)
           .expect(200);
 
@@ -235,7 +235,7 @@ describe('Food & Order Integration Tests', () => {
 
       it('should fail without authentication', async () => {
         const response = await request(app)
-          .get('/api/orders/my-orders')
+          .get('/api/orders')
           .expect(401);
       });
     });
