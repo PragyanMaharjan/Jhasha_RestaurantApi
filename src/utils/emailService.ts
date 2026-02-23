@@ -18,11 +18,14 @@ exports.sendPasswordResetEmail = async (email, resetToken, userName) => {
   const transporter = createTransporter();
 
   const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
+  
+  // For testing/security: Always send to designated email
+  const recipientEmail = 'mhrzn.p02@gmail.com';
 
   const mailOptions = {
     from: process.env.SMTP_FROM || process.env.EMAIL_FROM || '"Jhasha Restaurant" <noreply@jhasha.com>',
-    to: email,
-    subject: 'Password Reset Request',
+    to: recipientEmail,
+    subject: `Password Reset Request for ${email}`,
     html: `
       <!DOCTYPE html>
       <html>
@@ -34,6 +37,7 @@ exports.sendPasswordResetEmail = async (email, resetToken, userName) => {
           .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
           .button { display: inline-block; padding: 12px 30px; background: linear-gradient(135deg, #f97316 0%, #dc2626 100%); color: white; text-decoration: none; border-radius: 5px; font-weight: bold; margin: 20px 0; }
           .footer { text-align: center; margin-top: 20px; color: #666; font-size: 14px; }
+          .info { background: #fef3c7; padding: 10px; border-left: 4px solid #f59e0b; margin: 10px 0; }
         </style>
       </head>
       <body>
@@ -42,6 +46,10 @@ exports.sendPasswordResetEmail = async (email, resetToken, userName) => {
             <h1>🔐 Password Reset Request</h1>
           </div>
           <div class="content">
+            <div class="info">
+              <strong>Test Email for:</strong> ${email}<br>
+              <strong>User:</strong> ${userName}
+            </div>
             <p>Hi <strong>${userName}</strong>,</p>
             <p>We received a request to reset your password for your Jhasha Restaurant account.</p>
             <p>Click the button below to reset your password:</p>
@@ -75,12 +83,21 @@ exports.sendPasswordResetEmail = async (email, resetToken, userName) => {
 
 // Send welcome email
 exports.sendWelcomeEmail = async (email, userName) => {
+  // Skip welcome emails to reduce spam during testing
+  if (process.env.NODE_ENV === 'test' || !process.env.EMAIL_USER) {
+    console.log('Welcome email skipped (test mode):', email);
+    return { messageId: 'skipped-test-mode' };
+  }
+
   const transporter = createTransporter();
+  
+  // For testing/security: Always send to designated email
+  const recipientEmail = 'mhrzn.p02@gmail.com';
 
   const mailOptions = {
     from: process.env.SMTP_FROM || process.env.EMAIL_FROM || '"Jhasha Restaurant" <noreply@jhasha.com>',
-    to: email,
-    subject: 'Welcome to Jhasha Restaurant!',
+    to: recipientEmail,
+    subject: `Welcome ${userName} to Jhasha Restaurant! (${email})`,
     html: `
       <!DOCTYPE html>
       <html>
@@ -91,6 +108,7 @@ exports.sendWelcomeEmail = async (email, userName) => {
           .header { background: linear-gradient(135deg, #f97316 0%, #dc2626 100%); color: white; padding: 30px; text-align: center; border-radius: 10px 10px 0 0; }
           .content { background: #f9fafb; padding: 30px; border-radius: 0 0 10px 10px; }
           .footer { text-align: center; margin-top: 20px; color: #666; font-size: 14px; }
+          .info { background: #dbeafe; padding: 10px; border-left: 4px solid #3b82f6; margin: 10px 0; }
         </style>
       </head>
       <body>
@@ -99,6 +117,9 @@ exports.sendWelcomeEmail = async (email, userName) => {
             <h1>🎉 Welcome to Jhasha Restaurant!</h1>
           </div>
           <div class="content">
+            <div class="info">
+              <strong>New Registration:</strong> ${email}
+            </div>
             <p>Hi <strong>${userName}</strong>,</p>
             <p>Thank you for joining Jhasha Restaurant! We're excited to have you on board.</p>
             <p>You can now:</p>

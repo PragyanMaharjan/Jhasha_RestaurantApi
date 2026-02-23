@@ -1,7 +1,8 @@
 require('dotenv').config();
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpecs = require('./config/swagger');
 const errorHandler = require('./middleware/errorHandler');
 
 const app = express();
@@ -15,12 +16,18 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use('/uploads', express.static('uploads'));
 
+// API Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpecs, {
+  customCss: '.swagger-ui .topbar { display: none }',
+  customSiteTitle: 'Jhasha Restaurant API Docs',
+}));
+
 // Routes
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/food', require('./routes/foodRoutes'));
 app.use('/api/orders', require('./routes/orderRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
-app.use('/api/tracking', require('./routes/orderTracking'));
+app.use('/api/order-tracking', require('./routes/orderTracking'));
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -35,4 +42,5 @@ app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
-export default app;
+module.exports = app;
+export {};

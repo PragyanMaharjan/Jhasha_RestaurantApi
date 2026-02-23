@@ -252,7 +252,7 @@ exports.updateUserProfile = async (req, res, next) => {
     if (zipCode) user.zipCode = zipCode;
 
     if (req.file) {
-      user.profileImage = req.file.filename;
+      user.profileImage = req.file.path;
     }
 
     await user.save();

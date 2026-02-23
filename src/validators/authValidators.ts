@@ -73,11 +73,11 @@ export const forgotPasswordValidation = [
  * Validation rules for reset password
  */
 export const resetPasswordValidation = [
-  body('token')
+  body('resetToken')
     .notEmpty()
     .withMessage('Reset token is required'),
   
-  body('password')
+  body('newPassword')
     .notEmpty()
     .withMessage('Password is required')
     .isLength({ min: 6 })
@@ -86,7 +86,7 @@ export const resetPasswordValidation = [
   body('confirmPassword')
     .notEmpty()
     .withMessage('Please confirm your password')
-    .custom((value, { req }) => value === req.body.password)
+    .custom((value, { req }) => value === req.body.newPassword)
     .withMessage('Passwords do not match')
 ];
 
