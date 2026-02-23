@@ -58,12 +58,12 @@ const orderSchema = new mongoose.Schema({
   },
   orderStatus: {
     type: String,
-    enum: ['placed', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled'],
-    default: 'placed'
+    enum: ['pending', 'placed', 'confirmed', 'preparing', 'ready', 'out_for_delivery', 'delivered', 'cancelled'],
+    default: 'pending'
   },
   status: {
     type: String,
-    enum: ['Pending', 'Confirmed', 'Preparing', 'Out for Delivery', 'Delivered', 'Cancelled'],
+    enum: ['Pending', 'Confirmed', 'Preparing', 'Ready', 'Out for Delivery', 'Delivered', 'Cancelled'],
     default: 'Pending'
   },
   statusHistory: [{
@@ -72,10 +72,7 @@ const orderSchema = new mongoose.Schema({
       type: Date,
       default: Date.now
     },
-    updatedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
+    updatedBy: String,
     notes: String
   }],
   notes: {
@@ -105,4 +102,5 @@ orderSchema.pre('save', function(next) {
 });
 
 const Order = mongoose.model('Order', orderSchema);
+module.exports = Order;
 export default Order;
