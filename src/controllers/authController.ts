@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const Employee = require('../models/Employee');
 const { generateToken, generateResetToken } = require('../utils/helpers');
 const { sendPasswordResetEmail, sendWelcomeEmail } = require('../utils/emailService');
 const crypto = require('crypto');
@@ -123,42 +124,89 @@ exports.login = async (req, res, next) => {
  * @param {Request} req - Express request object containing user email
  * @param {Response} res - Express response object
  * @param {NextFunction} next - Express next middleware function
- * @returns {Promise<void>} Returns success message
- * @throws {400} If email is missing
+ * @returns {Promise<void>} Returns success message if email exists, error if not
+ * @throws {400} If email is missing or not found
  */
 exports.forgotPassword = async (req, res, next) => {
   try {
-    const { email } = req.body;
+    const { email, userType = 'user' } = req.body;
 
     if (!email) {
-      return res.status(400).json({ message: 'Email is required' });
+      return res.status(400).json({ 
+        success: false,
+        message: 'Email is required' 
+      });
     }
 
-    const user = await User.findOne({ email });
+    // Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Please provide a valid email address' 
+      });
+    }
+
+    let user;
+    
+    // Check if email exists in User collection
+    if (userType === 'user') {
+      user = await User.findOne({ email: email.toLowerCase() });
+    } 
+    // Check if email exists in Employee collection
+    else if (userType === 'employee') {
+      user = await Employee.findOne({ email: email.toLowerCase() });
+    }
+    // Check both collections
+    else {
+      user = await User.findOne({ email: email.toLowerCase() }) || 
+             await Employee.findOne({ email: email.toLowerCase() });
+    }
+
     if (!user) {
-      // Return success even if user not found (security best practice)
-      return res.status(200).json({ message: 'If an account exists, a password reset email has been sent' });
+      // Return error message indicating email doesn't exist
+      return res.status(404).json({ 
+        success: false,
+        message: 'No account found with that email address. Please check and try again.' 
+      });
     }
 
+    // Generate reset token
     const resetToken = generateResetToken();
     const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
 
+    // Update user/employee with reset token
     user.resetPasswordToken = resetTokenHash;
-    user.resetPasswordExpire = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    user.resetPasswordExpire = new Date(Date.now() + 60 * 60 * 1000); // 1 hour expiry
     await user.save();
 
-    // Send password reset email (non-blocking)
+    // Send password reset email
     try {
       await sendPasswordResetEmail(user.email, resetToken, user.name);
+      
+      res.status(200).json({ 
+        success: true,
+        message: 'Password reset link has been sent to your email. Please check your inbox.' 
+      });
     } catch (emailError) {
       console.error('Email sending failed:', emailError.message);
-      // Continue even if email fails - token is still saved in database
+      
+      // If email sending fails, remove the reset token
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpire = undefined;
+      await user.save();
+      
+      return res.status(500).json({ 
+        success: false,
+        message: 'Failed to send reset email. Please try again later.' 
+      });
     }
-
-    res.status(200).json({ message: 'Password reset email sent successfully' });
   } catch (error) {
     console.error('Forgot password error:', error);
-    next(error);
+    res.status(500).json({ 
+      success: false,
+      message: 'An error occurred. Please try again later.' 
+    });
   }
 };
 
