@@ -19,7 +19,8 @@ exports.getOrderTracking = async (req, res) => {
     }
 
     // Verify user has access to this order
-    const isOwner = order.customerId._id.toString() === req.user.id;
+    const userId = req.user.userId;
+    const isOwner = order.customerId && order.customerId._id && order.customerId._id.toString() === userId;
     const isAdmin = req.user.role === 'admin';
 
     if (!isOwner && !isAdmin) {
@@ -46,15 +47,17 @@ exports.getOrderTracking = async (req, res) => {
 
     res.json({
       order: {
-        id: order._id,
+        _id: order._id,
         orderNumber: `#${order._id.toString().slice(-8).toUpperCase()}`,
+        orderStatus: order.orderStatus,
         status: order.status,
         items: order.items,
         totalAmount: order.totalAmount,
         deliveryAddress: order.deliveryAddress,
         customer: order.customerId,
         createdAt: order.createdAt,
-        updatedAt: order.updatedAt
+        updatedAt: order.updatedAt,
+        statusHistory: order.statusHistory
       },
       tracking: {
         currentStatus: order.status,
@@ -74,11 +77,25 @@ exports.getOrderTracking = async (req, res) => {
 exports.updateOrderStatus = async (req, res) => {
   try {
     const { orderId } = req.params;
-    const { status, notes } = req.body;
+    let { status, notes } = req.body;
 
-    const validStatuses = ['Pending', 'Confirmed', 'Preparing', 'Out for Delivery', 'Delivered', 'Cancelled'];
+    // Normalize status using a mapping
+    const statusMap = {
+      'pending': 'Pending',
+      'confirmed': 'Confirmed',
+      'preparing': 'Preparing',
+      'ready': 'Ready',
+      'out_for_delivery': 'Out for Delivery',
+      'out for delivery': 'Out for Delivery',
+      'delivered': 'Delivered',
+      'cancelled': 'Cancelled'
+    };
+
+    status = statusMap[status.toLowerCase()];
+
+    const validStatuses = ['Pending', 'Confirmed', 'Preparing', 'Out for Delivery', 'Delivered', 'Cancelled', 'Ready'];
     
-    if (!validStatuses.includes(status)) {
+    if (!status || !validStatuses.includes(status)) {
       return res.status(400).json({ message: 'Invalid order status' });
     }
 
@@ -89,17 +106,20 @@ exports.updateOrderStatus = async (req, res) => {
     }
 
     // Update order status
+    order.orderStatus = status.toLowerCase().replace(/\s+/g, '_');
     order.status = status;
     
-    // Add status change to history
+    // Add status change to history (store lowercase)
     if (!order.statusHistory) {
       order.statusHistory = [];
     }
     
+    const userId = req.user.userId;
+    const lowercaseStatus = status.toLowerCase().replace(/\s+/g, '_');
     order.statusHistory.push({
-      status,
+      status: lowercaseStatus,
       timestamp: new Date(),
-      updatedBy: req.user.id,
+      updatedBy: userId,
       notes: notes || ''
     });
 
@@ -111,8 +131,10 @@ exports.updateOrderStatus = async (req, res) => {
     res.json({
       message: 'Order status updated successfully',
       order: {
-        id: order._id,
+        _id: order._id,
+        orderStatus: order.orderStatus,
         status: order.status,
+        statusHistory: order.statusHistory,
         updatedAt: order.updatedAt
       }
     });
@@ -125,16 +147,17 @@ exports.updateOrderStatus = async (req, res) => {
 // Get all active deliveries (Admin only)
 exports.getActiveDeliveries = async (req, res) => {
   try {
-    const activeStatuses = ['Confirmed', 'Preparing', 'Out for Delivery'];
+    const activeStatuses = ['confirmed', 'preparing', 'ready', 'out_for_delivery'];
     
-    const orders = await Order.find({ status: { $in: activeStatuses } })
+    const orders = await Order.find({ orderStatus: { $in: activeStatuses } })
       .populate('customerId', 'name phone address')
       .sort({ createdAt: -1 });
 
     const deliveries = orders.map(order => ({
-      id: order._id,
+      _id: order._id,
       orderNumber: `#${order._id.toString().slice(-8).toUpperCase()}`,
       customer: order.customerId,
+      orderStatus: order.orderStatus,
       status: order.status,
       totalAmount: order.totalAmount,
       estimatedDelivery: calculateEstimatedDelivery(order),
