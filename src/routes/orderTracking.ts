@@ -2,23 +2,25 @@ const express = require('express');
 const router = express.Router();
 const { verifyToken, verifyAdmin } = require('../middleware/auth');
 const orderTrackingController = require('../controllers/orderTrackingController');
+import { validate } from '../middleware/validate';
+import { orderTrackingIdValidation, updateOrderTrackingStatusValidation } from '../validators/orderTrackingValidators';
 
 /**
  * Order Tracking Routes
  * Provides real-time order status and delivery tracking
  */
 
-// @route   GET /api/tracking/order/:orderId
+// @route   GET /api/order-tracking/order/:orderId
 // @desc    Get detailed tracking information for an order
 // @access  Private (Customer or Admin)
-router.get('/order/:orderId', verifyToken, orderTrackingController.getOrderTracking);
+router.get('/order/:orderId', verifyToken, orderTrackingIdValidation, validate, orderTrackingController.getOrderTracking);
 
-// @route   PUT /api/tracking/order/:orderId/status
+// @route   PUT /api/order-tracking/order/:orderId/status
 // @desc    Update order status and trigger notifications
 // @access  Private (Admin only)
-router.put('/order/:orderId/status', verifyToken, verifyAdmin, orderTrackingController.updateOrderStatus);
+router.put('/order/:orderId/status', verifyToken, verifyAdmin, updateOrderTrackingStatusValidation, validate, orderTrackingController.updateOrderStatus);
 
-// @route   GET /api/tracking/active-deliveries
+// @route   GET /api/order-tracking/active-deliveries
 // @desc    Get all active deliveries
 // @access  Private (Admin only)
 router.get('/active-deliveries', verifyToken, verifyAdmin, orderTrackingController.getActiveDeliveries);
