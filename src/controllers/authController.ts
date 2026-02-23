@@ -266,4 +266,47 @@ exports.updateUserProfile = async (req, res, next) => {
   }
 };
 
+/**
+ * Change user password
+ * @route POST /api/auth/change-password
+ * @description Updates the user's password after verifying the current password
+ * @param {Request} req - Express request object with currentPassword and newPassword
+ * @param {Response} res - Express response object
+ * @param {NextFunction} next - Express next middleware function
+ * @returns {Promise<void>} Returns success message
+ * @throws {400} If passwords don't match
+ * @throws {401} If current password is incorrect
+ * @throws {404} If user not found
+ */
+exports.changePassword = async (req, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: 'Current password and new password are required' });
+    }
+
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Verify current password
+    const isPasswordValid = await user.matchPassword(currentPassword);
+    if (!isPasswordValid) {
+      return res.status(401).json({ message: 'Current password is incorrect' });
+    }
+
+    // Update password
+    user.password = newPassword;
+    await user.save();
+
+    res.status(200).json({
+      message: 'Password changed successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export {};
