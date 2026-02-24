@@ -23,8 +23,8 @@ export const registerValidation = [
     .trim()
     .notEmpty()
     .withMessage('Phone number is required')
-    .matches(/^[\+]?[(]?[0-9]{1,4}[)]?[-\s\.]?[(]?[0-9]{1,4}[)]?[-\s\.]?[0-9]{1,9}$/)
-    .withMessage('Please provide a valid phone number'),
+    .matches(/^\+977[- ]?[9][6-9]\d{8}$/)
+    .withMessage('Please provide a valid Nepal phone number (e.g., +977-9812345678). Must start with +977 and have 10 digits starting with 9'),
   
   body('password')
     .notEmpty()

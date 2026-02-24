@@ -69,7 +69,7 @@ exports.getOrderTracking = async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching order tracking:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Unable to load order tracking information. Please try again.' });
   }
 };
 
@@ -140,7 +140,7 @@ exports.updateOrderStatus = async (req, res) => {
     });
   } catch (error) {
     console.error('Error updating order status:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Unable to update order status. Please try again.' });
   }
 };
 
@@ -170,7 +170,7 @@ exports.getActiveDeliveries = async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching active deliveries:', error);
-    res.status(500).json({ message: 'Server error' });
+    res.status(500).json({ message: 'Unable to load active deliveries. Please refresh the page.' });
   }
 };
 

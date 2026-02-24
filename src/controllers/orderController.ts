@@ -186,7 +186,7 @@ exports.cancelOrder = async (req, res, next) => {
     }
 
     if (order.orderStatus !== 'placed') {
-      return res.status(400).json({ message: 'Cannot cancel order at this stage' });
+      return res.status(400).json({ message: 'This order cannot be cancelled at its current stage' });
     }
 
     order.orderStatus = 'cancelled';

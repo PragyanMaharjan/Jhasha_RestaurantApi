@@ -24,7 +24,7 @@ describe('Food & Order Integration Tests', () => {
     testUser = new User({
       name: 'Test User',
       email: 'user@example.com',
-      phone: '+1234567890',
+      phone: '+977-9867890123',
       password: 'password123',
     });
     await testUser.save();
@@ -178,7 +178,7 @@ describe('Food & Order Integration Tests', () => {
         deliveryAddress: '123 Test St',
         deliveryCity: 'Test City',
         deliveryZipCode: '12345',
-        phoneNumber: '+1234567890',
+        phoneNumber: '+977-9867890123',
         paymentMethod: 'cash_on_delivery',
         orderStatus: 'pending',
         paymentStatus: 'pending',
@@ -200,7 +200,7 @@ describe('Food & Order Integration Tests', () => {
           deliveryAddress: '456 New St',
           deliveryCity: 'New City',
           deliveryZipCode: '54321',
-          phoneNumber: '+1234567890',
+          phoneNumber: '+977-9867890123',
           paymentMethod: 'cash_on_delivery',
         };
 

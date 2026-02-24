@@ -21,7 +21,7 @@ describe('User Management Integration Tests', () => {
     testUser = new User({
       name: 'Test User',
       email: 'user@example.com',
-      phone: '+1234567890',
+      phone: '+977-9889012345',
       password: 'password123',
       role: 'user',
     });
@@ -150,7 +150,7 @@ describe('User Management Integration Tests', () => {
         .send({
           name: 'Test User',
           email: 'another@example.com',
-          phone: '+1234567890',
+          phone: '+977-9889012345',
         })
         .expect(400);
 
@@ -175,7 +175,7 @@ describe('User Management Integration Tests', () => {
       const adminUser = await User.create({
         name: 'Admin User',
         email: 'testadmin@example.com',
-        phone: '+1234567890',
+        phone: '+977-9856789012',
         password: 'password123',
         role: 'admin',
       });
@@ -185,7 +185,7 @@ describe('User Management Integration Tests', () => {
         .set('Authorization', `Bearer ${adminToken}`)
         .expect(403);
 
-      expect(response.body.message).toContain('Cannot delete admin');
+      expect(response.body.message).toContain('Admin accounts cannot be deleted');
     });
 
     it('should return 404 for non-existent user', async () => {

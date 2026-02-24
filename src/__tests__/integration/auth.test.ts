@@ -9,7 +9,7 @@ describe('Auth Integration Tests', () => {
       const userData = {
         name: 'John Doe',
         email: 'john@example.com',
-        phone: '+1234567890',
+        phone: '+977-9812345678',
         password: 'password123',
         confirmPassword: 'password123',
       };
@@ -28,7 +28,7 @@ describe('Auth Integration Tests', () => {
       const userData = {
         name: 'John Doe',
         email: 'john@example.com',
-        phone: '+1234567890',
+        phone: '+977-9812345678',
         password: 'password123',
         confirmPassword: 'different',
       };
@@ -45,7 +45,7 @@ describe('Auth Integration Tests', () => {
       const userData = {
         name: 'John Doe',
         email: 'john@example.com',
-        phone: '+1234567890',
+        phone: '+977-9812345678',
         password: 'password123',
         confirmPassword: 'password123',
       };
@@ -78,7 +78,7 @@ describe('Auth Integration Tests', () => {
       const user = new User({
         name: 'Test User',
         email: 'test@example.com',
-        phone: '+1234567890',
+        phone: '+977-9823456789',
         password: 'password123',
       });
       await user.save();
@@ -137,7 +137,7 @@ describe('Auth Integration Tests', () => {
       const user = new User({
         name: 'Test User',
         email: 'mhrzn.p02@gmail.com',
-        phone: '+1234567890',
+        phone: '+977-9834567890',
         password: 'password123',
       });
       await user.save();
@@ -184,7 +184,7 @@ describe('Auth Integration Tests', () => {
       user = new User({
         name: 'Test User',
         email: 'mhrzn.p02@gmail.com',
-        phone: '+1234567890',
+        phone: '+977-9878901234',
         password: 'oldpassword',
         resetPasswordToken: resetTokenHash,
         resetPasswordExpire: new Date(Date.now() + 60 * 60 * 1000),

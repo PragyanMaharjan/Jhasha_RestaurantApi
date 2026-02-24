@@ -19,13 +19,13 @@ exports.sendPasswordResetEmail = async (email, resetToken, userName) => {
 
   const resetUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
   
-  // For testing/security: Always send to designated email
-  const recipientEmail = 'mhrzn.p02@gmail.com';
+  // Send to the actual user's email
+  const recipientEmail = email;
 
   const mailOptions = {
     from: process.env.SMTP_FROM || process.env.EMAIL_FROM || '"Jhasha Restaurant" <noreply@jhasha.com>',
     to: recipientEmail,
-    subject: `Password Reset Request for ${email}`,
+    subject: `Password Reset Request - Jhasha Restaurant`,
     html: `
       <!DOCTYPE html>
       <html>
@@ -91,13 +91,13 @@ exports.sendWelcomeEmail = async (email, userName) => {
 
   const transporter = createTransporter();
   
-  // For testing/security: Always send to designated email
-  const recipientEmail = 'mhrzn.p02@gmail.com';
+  // Send to the actual user's email
+  const recipientEmail = email;
 
   const mailOptions = {
     from: process.env.SMTP_FROM || process.env.EMAIL_FROM || '"Jhasha Restaurant" <noreply@jhasha.com>',
     to: recipientEmail,
-    subject: `Welcome ${userName} to Jhasha Restaurant! (${email})`,
+    subject: `Welcome to Jhasha Restaurant!`,
     html: `
       <!DOCTYPE html>
       <html>

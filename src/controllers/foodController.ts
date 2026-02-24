@@ -72,7 +72,7 @@ exports.addFood = async (req, res, next) => {
     const { name, description, category, price, preparationTime, isVegetarian, spiceLevel } = req.body;
 
     if (!req.file) {
-      return res.status(400).json({ message: 'Food image is required' });
+      return res.status(400).json({ message: 'Please upload an image for the food item' });
     }
 
     const food = new Food({

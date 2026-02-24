@@ -25,7 +25,7 @@ describe('Order Tracking Integration Tests', () => {
     const userData = {
       name: 'Test User',
       email: 'testuser@example.com',
-      phone: '+1234567890',
+      phone: '+977-9845678901',
       password: 'password123',
       confirmPassword: 'password123',
     };
@@ -60,7 +60,7 @@ describe('Order Tracking Integration Tests', () => {
       deliveryAddress: '123 Test Street',
       deliveryCity: 'Test City',
       deliveryZipCode: '12345',
-      phoneNumber: '+1234567890',
+      phoneNumber: '+977-9845678901',
       paymentMethod: 'online',
       paymentStatus: 'completed',
       orderStatus: 'confirmed',

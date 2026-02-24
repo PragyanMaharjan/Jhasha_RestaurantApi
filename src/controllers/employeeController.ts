@@ -1,7 +1,7 @@
 const Employee = require('../models/Employee');
 const { generateToken } = require('../utils/helpers');
 const { sendWelcomeEmail } = require('../utils/emailService');
-const crypto = require('crypto');
+import * as crypto from 'crypto';
 
 /**
  * Register a new employee
@@ -133,7 +133,7 @@ exports.loginEmployee = async (req, res, next) => {
 exports.getAllEmployees = async (req, res, next) => {
   try {
     const { department, isActive } = req.query;
-    let filter = {};
+    let filter: any = {};
 
     if (department) {
       filter.department = department;

@@ -263,6 +263,23 @@ exports.resetPassword = async (req, res, next) => {
  */
 exports.getUserProfile = async (req, res, next) => {
   try {
+    // Handle hardcoded admin
+    if (req.user.userId === 'admin-id') {
+      return res.status(200).json({
+        user: {
+          _id: 'admin-id',
+          name: 'Admin',
+          email: 'admin@gmail.com',
+          role: 'admin',
+          isActive: true,
+          phone: '+977-9800000000',
+          address: 'Kathmandu, Nepal',
+          city: 'Kathmandu',
+          zipCode: '44600'
+        }
+      });
+    }
+
     const user = await User.findById(req.user.userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
@@ -287,6 +304,24 @@ exports.getUserProfile = async (req, res, next) => {
 exports.updateUserProfile = async (req, res, next) => {
   try {
     const { name, phone, address, city, zipCode } = req.body;
+
+    // Handle hardcoded admin
+    if (req.user.userId === 'admin-id') {
+      return res.status(200).json({
+        message: 'Profile updated successfully',
+        user: {
+          _id: 'admin-id',
+          name: name || 'Admin',
+          email: 'admin@gmail.com',
+          role: 'admin',
+          isActive: true,
+          phone: phone || '+977-9800000000',
+          address: address || 'Kathmandu, Nepal',
+          city: city || 'Kathmandu',
+          zipCode: zipCode || '44600'
+        }
+      });
+    }
 
     const user = await User.findById(req.user.userId);
     if (!user) {
@@ -331,7 +366,7 @@ exports.changePassword = async (req, res, next) => {
     const { currentPassword, newPassword } = req.body;
 
     if (!currentPassword || !newPassword) {
-      return res.status(400).json({ message: 'Current password and new password are required' });
+      return res.status(400).json({ message: 'Current password is required' });
     }
 
     const user = await User.findById(req.user.userId);
@@ -342,7 +377,7 @@ exports.changePassword = async (req, res, next) => {
     // Verify current password
     const isPasswordValid = await user.matchPassword(currentPassword);
     if (!isPasswordValid) {
-      return res.status(401).json({ message: 'Current password is incorrect' });
+      return res.status(401).json({ message: 'The current password you entered is incorrect' });
     }
 
     // Update password
