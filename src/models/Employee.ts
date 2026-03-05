@@ -44,6 +44,22 @@ const employeeSchema = new mongoose.Schema({
     type: Date,
     default: Date.now
   },
+  experience: {
+    type: Number,
+    default: 0
+  },
+  skills: [{
+    type: String
+  }],
+  status: {
+    type: String,
+    enum: ['active', 'inactive', 'on_leave'],
+    default: 'active'
+  },
+  idProof: {
+    type: String,
+    default: null
+  },
   profileImage: {
     type: String,
     default: null
@@ -98,14 +114,24 @@ employeeSchema.pre('save', async function(next) {
   }
 });
 
+// Virtual property for joinDate (alias for joiningDate)
+employeeSchema.virtual('joinDate').get(function() {
+  return this.joiningDate;
+}).set(function(value) {
+  this.joiningDate = value;
+});
+
+// Ensure virtuals are included when converting to object
+employeeSchema.set('toObject', { virtuals: true });
+
 // Method to compare passwords
 employeeSchema.methods.matchPassword = async function(enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-// Remove password from response
+// Remove password from response and include virtuals
 employeeSchema.methods.toJSON = function() {
-  const employee = this.toObject();
+  const employee = this.toObject({ virtuals: true });
   delete employee.password;
   return employee;
 };

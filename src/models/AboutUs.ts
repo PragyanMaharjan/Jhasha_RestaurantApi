@@ -11,6 +11,10 @@ const aboutUsSchema = new mongoose.Schema({
     required: true,
     default: 'Welcome to Jhasha Restaurant, Nepal\'s premier destination for authentic Nepali cuisine.'
   },
+  image: {
+    type: String,
+    default: ''
+  },
   story: {
     type: String,
     required: true,
@@ -36,6 +40,20 @@ const aboutUsSchema = new mongoose.Schema({
     type: String,
     default: 'info@jhasharestaurant.com.np'
   },
+  contact: {
+    phone: {
+      type: String,
+      default: '+977-9812345678'
+    },
+    email: {
+      type: String,
+      default: 'info@jhasharestaurant.com.np'
+    },
+    address: {
+      type: String,
+      default: 'Thamel, Kathmandu, Nepal'
+    }
+  },
   openingHours: {
     type: String,
     default: 'Sunday - Saturday: 10:00 AM - 10:00 PM'
@@ -47,6 +65,15 @@ const aboutUsSchema = new mongoose.Schema({
     title: String,
     description: String,
     year: String
+  }],
+  teamMembers: [{
+    name: String,
+    position: String,
+    bio: String,
+    image: String
+  }],
+  highlights: [{
+    type: String
   }],
   teamSize: {
     type: Number,

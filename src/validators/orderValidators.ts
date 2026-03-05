@@ -16,6 +16,10 @@ export const createOrderValidation = [
     .isInt({ min: 1, max: 50 })
     .withMessage('Quantity must be between 1 and 50'),
   
+  body('items.*.price')
+    .isFloat({ min: 0 })
+    .withMessage('Price must be a positive number'),
+  
   body('totalAmount')
     .isFloat({ min: 0 })
     .withMessage('Total amount must be a positive number'),
