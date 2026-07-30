@@ -8,7 +8,7 @@ const createTransporter = () => {
     secure: false, // Use TLS
     auth: {
       user: process.env.SMTP_USER || process.env.EMAIL_USER,
-      pass: process.env.SMTP_PASS || process.env.EMAIL_PASSWORD,
+      pass: process.env.SMTP_PASS || process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS,
     },
   });
 };

@@ -1,7 +1,176 @@
+const mongoose = require('mongoose');
 const Order = require('../models/Order');
+const Cart = require('../models/Cart');
+const Food = require('../models/Food');
+const Coupon = require('../models/Coupon');
 const Stripe = require('stripe');
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+
+exports.prepareOrder = async (req, res, next) => {
+  try {
+    const { shippingAddress, paymentMethod, notes, couponCode } = req.body;
+    const userId = req.user.userId;
+
+    if (!shippingAddress || !shippingAddress.address || !shippingAddress.city || !shippingAddress.postalCode || !shippingAddress.phone) {
+      return res.status(400).json({ success: false, message: 'Shipping address is incomplete' });
+    }
+
+    const cart = await Cart.findOne({ user: userId }).populate('items.product');
+    if (!cart || cart.items.length === 0) {
+      return res.status(400).json({ success: false, message: 'Cart is empty' });
+    }
+
+    let subtotal = 0;
+    const orderItems = [];
+
+    for (const item of cart.items) {
+      const product = await Food.findOne({ _id: item.product._id, isAvailable: true });
+      if (!product) {
+        return res.status(400).json({ success: false, message: `Product not available: ${item.product.name || item.product}` });
+      }
+      if (product.stock < item.quantity) {
+        return res.status(400).json({ success: false, message: `Insufficient stock for ${product.name}` });
+      }
+
+      subtotal += product.price * item.quantity;
+      orderItems.push({
+        foodId: product._id,
+        quantity: item.quantity,
+        price: product.price
+      });
+    }
+
+    const deliveryFee = subtotal > 5000 ? 0 : 50;
+    const tax = Math.round(subtotal * 0.05);
+    let totalAmount = subtotal + deliveryFee + tax;
+    let couponData = null;
+
+    if (couponCode) {
+      const coupon = await Coupon.findOne({
+        code: couponCode.toUpperCase(),
+        isActive: true,
+        expiresAt: { $gt: new Date() },
+        usageLimit: { $gt: 0 }
+      });
+
+      if (coupon) {
+        const alreadyUsed = coupon.oneTimeUse
+          ? await Order.exists({ userId, 'coupon.code': coupon.code, paymentStatus: 'completed' })
+          : false;
+
+        if (!alreadyUsed) {
+          const discount = coupon.type === 'percentage'
+            ? Math.round((subtotal * coupon.value) / 100)
+            : coupon.value;
+          couponData = {
+            code: coupon.code,
+            discountAmount: discount
+          };
+          totalAmount = Math.max(0, totalAmount - discount);
+        }
+      }
+    }
+
+    const order = new Order({
+      userId,
+      items: orderItems,
+      totalAmount,
+      deliveryAddress: shippingAddress.address,
+      deliveryCity: shippingAddress.city,
+      deliveryZipCode: shippingAddress.postalCode,
+      phoneNumber: shippingAddress.phone,
+      paymentMethod: paymentMethod || 'online',
+      notes: notes || '',
+      paymentStatus: 'pending',
+      orderStatus: 'placed',
+      coupon: couponData
+    });
+
+    await order.save();
+
+    res.status(201).json({ success: true, data: order });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.verifyCoupon = async (req, res, next) => {
+  try {
+    const { couponCode, cartTotal } = req.body;
+    if (!couponCode || cartTotal == null) {
+      return res.status(400).json({ success: false, message: 'Coupon code and cart total are required' });
+    }
+
+    const coupon = await Coupon.findOne({
+      code: couponCode.toUpperCase(),
+      isActive: true,
+      expiresAt: { $gt: new Date() },
+      usageLimit: { $gt: 0 }
+    });
+
+    if (!coupon) {
+      return res.status(400).json({ success: false, message: 'Invalid or expired coupon' });
+    }
+
+    if (cartTotal < coupon.minOrderValue) {
+      return res.status(400).json({ success: false, message: `Minimum order value of Rs. ${coupon.minOrderValue} required` });
+    }
+
+    const alreadyUsed = coupon.oneTimeUse
+      ? await Order.exists({ userId: req.user.userId, 'coupon.code': coupon.code, paymentStatus: 'completed' })
+      : false;
+
+    if (alreadyUsed) {
+      return res.status(400).json({ success: false, message: 'You have already used this coupon' });
+    }
+
+    let discount = coupon.type === 'percentage'
+      ? Math.round((cartTotal * coupon.value) / 100)
+      : coupon.value;
+
+    if (coupon.maxDiscount > 0 && discount > coupon.maxDiscount) {
+      discount = coupon.maxDiscount;
+    }
+
+    res.status(200).json({ success: true, data: { code: coupon.code, discount, newTotal: Math.max(0, cartTotal - discount) } });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.confirmOrderInternal = async (orderId, paymentDetails: any = {}, session = null) => {
+  const orderQuery = Order.findById(orderId);
+  if (session) orderQuery.session(session);
+  const order = await orderQuery;
+
+  if (!order || order.paymentStatus === 'completed') return order;
+
+  for (const item of order.items) {
+    const updatedFood = await Food.findOneAndUpdate(
+      { _id: item.foodId, stock: { $gte: item.quantity } },
+      { $inc: { stock: -item.quantity, totalOrders: 1 } },
+      { session, new: true }
+    );
+    if (!updatedFood) {
+      throw new Error(`Insufficient stock for item ${item.foodId}`);
+    }
+  }
+
+  order.paymentStatus = 'completed';
+  order.orderStatus = 'confirmed';
+  order.transactionId = paymentDetails.transactionId || order.transactionId;
+  order.updatedAt = new Date();
+  if (session) {
+    await order.save({ session });
+    await Cart.findOneAndUpdate({ user: order.userId }, { $set: { items: [] } }, { session });
+  } else {
+    await order.save();
+    await Cart.findOneAndUpdate({ user: order.userId }, { $set: { items: [] } });
+  }
+
+  return order;
+};
 
 /**
  * Create a new order

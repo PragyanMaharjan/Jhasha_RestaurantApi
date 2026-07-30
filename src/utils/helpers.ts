@@ -2,10 +2,12 @@ const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const crypto = require('crypto');
 
+const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
+
 const generateToken = (userId, role) => {
   return jwt.sign(
     { userId, role },
-    process.env.JWT_SECRET,
+    JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRE || '24h' }
   );
 };
@@ -17,7 +19,7 @@ const sendEmail = async (to, subject, htmlContent) => {
     secure: false,
     auth: {
       user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASSWORD
+      pass: process.env.EMAIL_PASSWORD || process.env.EMAIL_PASS
     }
   });
 

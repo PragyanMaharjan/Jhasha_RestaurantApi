@@ -1,4 +1,18 @@
 import { body } from 'express-validator';
+import { validatePasswordPolicy } from '../utils/passwordPolicy';
+
+const passwordValidation = body('password')
+  .notEmpty()
+  .withMessage('Password is required')
+  .isLength({ min: 12, max: 128 })
+  .withMessage('Password must be at least 12 characters long and no more than 128 characters')
+  .custom((value) => {
+    const result = validatePasswordPolicy(value);
+    if (!result.isValid) {
+      throw new Error(result.errors.join(' '));
+    }
+    return true;
+  });
 
 /**
  * Validation rules for user registration
@@ -26,13 +40,7 @@ export const registerValidation = [
     .matches(/^\+977[- ]?[9][6-9]\d{8}$/)
     .withMessage('Please provide a valid Nepal phone number (e.g., +977-9812345678). Must start with +977 and have 10 digits starting with 9'),
   
-  body('password')
-    .notEmpty()
-    .withMessage('Password is required')
-    .isLength({ min: 6 })
-    .withMessage('Password must be at least 6 characters long')
-    .matches(/^(?=.*[a-z])(?=.*[A-Z])|(?=.*\d)/)
-    .withMessage('Password must contain at least one uppercase letter or number'),
+  passwordValidation,
   
   body('confirmPassword')
     .notEmpty()
@@ -80,8 +88,13 @@ export const resetPasswordValidation = [
   body('newPassword')
     .notEmpty()
     .withMessage('Password is required')
-    .isLength({ min: 6 })
-    .withMessage('Password must be at least 6 characters long'),
+    .custom((value) => {
+      const result = validatePasswordPolicy(value);
+      if (!result.isValid) {
+        throw new Error(result.errors.join(' '));
+      }
+      return true;
+    }),
   
   body('confirmPassword')
     .notEmpty()

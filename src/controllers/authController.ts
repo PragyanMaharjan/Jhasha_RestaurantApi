@@ -3,6 +3,69 @@ const Employee = require('../models/Employee');
 const { generateToken, generateResetToken } = require('../utils/helpers');
 const { sendPasswordResetEmail, sendWelcomeEmail } = require('../utils/emailService');
 const crypto = require('crypto');
+const bcrypt = require('bcryptjs');
+const { validatePasswordPolicy } = require('../utils/passwordPolicy');
+const { generateTwoFactorSecret, buildOtpAuthUrl, evaluateTwoFactorLogin, verifyTwoFactorCode } = require('../utils/twoFactor');
+
+const loginAttempts = new Map();
+const MAX_LOGIN_ATTEMPTS = 5;
+const LOCKOUT_WINDOW_MS = 15 * 60 * 1000;
+
+const getClientKey = (req: any) => {
+  const forwarded = req.headers['x-forwarded-for'];
+  const ip = Array.isArray(forwarded) ? forwarded[0] : forwarded || req.ip || 'unknown';
+  return `${ip}`.replace(/[^a-zA-Z0-9._:-]/g, '');
+};
+
+const normalizeEmail = (email) => {
+  const normalized = String(email || '').trim().toLowerCase();
+  const [localPart, domain] = normalized.split('@');
+  if (!localPart || !domain) {
+    return normalized;
+  }
+
+  if (['gmail.com', 'googlemail.com'].includes(domain)) {
+    const withoutPlus = localPart.split('+')[0];
+    const withoutDots = withoutPlus.replace(/\./g, '');
+    return `${withoutDots}@gmail.com`;
+  }
+
+  return normalized;
+};
+
+const buildEmailQuery = (email) => {
+  const raw = String(email || '').trim().toLowerCase();
+  const canonical = normalizeEmail(raw);
+
+  if (raw === canonical) {
+    return { email: raw };
+  }
+
+  return { email: { $in: [raw, canonical] } };
+};
+
+const isLockedOut = (req: any) => {
+  const key = getClientKey(req);
+  const state = loginAttempts.get(key);
+  if (!state) return false;
+  if (Date.now() - state.lastAttempt < LOCKOUT_WINDOW_MS) {
+    return state.count >= MAX_LOGIN_ATTEMPTS;
+  }
+  loginAttempts.delete(key);
+  return false;
+};
+
+const recordFailedLogin = (req: any) => {
+  const key = getClientKey(req);
+  const state = loginAttempts.get(key) || { count: 0, lastAttempt: 0 };
+  state.count += 1;
+  state.lastAttempt = Date.now();
+  loginAttempts.set(key, state);
+};
+
+const clearLoginAttempts = (req: any) => {
+  loginAttempts.delete(getClientKey(req));
+};
 
 /**
  * Register a new user
@@ -17,19 +80,25 @@ const crypto = require('crypto');
 exports.register = async (req, res, next) => {
   try {
     const { name, email, phone, password, confirmPassword } = req.body;
+    const normalizedEmail = normalizeEmail(email);
 
     if (password !== confirmPassword) {
       return res.status(400).json({ message: 'Passwords do not match' });
     }
 
-    let user = await User.findOne({ email });
+    const passwordPolicy = validatePasswordPolicy(password);
+    if (!passwordPolicy.isValid) {
+      return res.status(400).json({ success: false, message: passwordPolicy.errors.join(' ') });
+    }
+
+    let user = await User.findOne({ email: normalizedEmail });
     if (user) {
       return res.status(400).json({ message: 'Email already registered' });
     }
 
     const userData: any = {
       name,
-      email,
+      email: normalizedEmail,
       phone,
       password
     };
@@ -73,14 +142,21 @@ exports.register = async (req, res, next) => {
  */
 exports.login = async (req, res, next) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, twoFactorCode } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({ message: 'Email and password are required' });
     }
 
-    // Hardcoded Admin Credentials
-    if (email === 'admin@gmail.com' && password === 'admin123') {
+    if (isLockedOut(req)) {
+      return res.status(429).json({ success: false, message: 'Too many login attempts. Please try again later.' });
+    }
+
+    const adminEmail = process.env.ADMIN_EMAIL || 'admin@gmail.com';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'Admin@2026!Secure';
+
+    if (String(email).toLowerCase() === adminEmail.toLowerCase() && password === adminPassword) {
+      clearLoginAttempts(req);
       const adminToken = generateToken('admin-id', 'admin');
       return res.status(200).json({
         message: 'Admin login successful',
@@ -88,23 +164,32 @@ exports.login = async (req, res, next) => {
         user: {
           _id: 'admin-id',
           name: 'Admin',
-          email: 'admin@gmail.com',
+          email: adminEmail,
           role: 'admin',
           isActive: true
         }
       });
     }
 
-    const user = await User.findOne({ email });
+    const emailQuery = buildEmailQuery(email);
+    const user = await User.findOne(emailQuery);
     if (!user) {
+      recordFailedLogin(req);
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
     const isPasswordMatch = await user.matchPassword(password);
     if (!isPasswordMatch) {
+      recordFailedLogin(req);
       return res.status(401).json({ message: 'Invalid email or password' });
     }
 
+    const twoFactorResult = evaluateTwoFactorLogin(user, twoFactorCode);
+    if (twoFactorResult.required) {
+      return res.status(401).json({ success: false, message: twoFactorResult.message });
+    }
+
+    clearLoginAttempts(req);
     const token = generateToken(user._id, user.role);
 
     res.status(200).json({
@@ -148,19 +233,20 @@ exports.forgotPassword = async (req, res, next) => {
     }
 
     let user;
+    const emailQuery = buildEmailQuery(email);
     
     // Check if email exists in User collection
     if (userType === 'user') {
-      user = await User.findOne({ email: email.toLowerCase() });
+      user = await User.findOne(emailQuery);
     } 
     // Check if email exists in Employee collection
     else if (userType === 'employee') {
-      user = await Employee.findOne({ email: email.toLowerCase() });
+      user = await Employee.findOne(emailQuery);
     }
     // Check both collections
     else {
-      user = await User.findOne({ email: email.toLowerCase() }) || 
-             await Employee.findOne({ email: email.toLowerCase() });
+      user = await User.findOne(emailQuery) || 
+             await Employee.findOne(emailQuery);
     }
 
     if (!user) {
@@ -361,12 +447,71 @@ exports.updateUserProfile = async (req, res, next) => {
  * @throws {401} If current password is incorrect
  * @throws {404} If user not found
  */
+exports.setupTwoFactor = async (req, res, next) => {
+  try {
+    const userId = req.user?.userId;
+    if (!userId || userId === 'admin-id') {
+      return res.status(403).json({ success: false, message: 'Two-factor setup is only available for regular users' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const secret = generateTwoFactorSecret();
+    user.twoFactorSecret = secret;
+    user.twoFactorEnabled = false;
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      secret,
+      otpauthUrl: buildOtpAuthUrl(secret, user.email),
+      message: 'Scan the QR code with your authenticator app to complete setup.'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.verifyTwoFactor = async (req, res, next) => {
+  try {
+    const userId = req.user?.userId;
+    const { code } = req.body;
+    if (!userId || userId === 'admin-id') {
+      return res.status(403).json({ success: false, message: 'Two-factor verification is only available for regular users' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user || !user.twoFactorSecret) {
+      return res.status(400).json({ success: false, message: 'Two-factor setup has not been completed' });
+    }
+
+    if (!code || !verifyTwoFactorCode(user.twoFactorSecret, code)) {
+      return res.status(401).json({ success: false, message: 'Invalid two-factor code' });
+    }
+
+    user.twoFactorEnabled = true;
+    await user.save();
+
+    res.status(200).json({ success: true, message: 'Two-factor authentication enabled' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 exports.changePassword = async (req, res, next) => {
   try {
     const { currentPassword, newPassword } = req.body;
 
     if (!currentPassword || !newPassword) {
       return res.status(400).json({ message: 'Current password is required' });
+    }
+
+    const passwordPolicy = validatePasswordPolicy(newPassword);
+    if (!passwordPolicy.isValid) {
+      return res.status(400).json({ success: false, message: passwordPolicy.errors.join(' ') });
     }
 
     const user = await User.findById(req.user.userId);
@@ -380,7 +525,19 @@ exports.changePassword = async (req, res, next) => {
       return res.status(401).json({ message: 'The current password you entered is incorrect' });
     }
 
-    // Update password
+    const recentHashes = user.passwordHistory || [];
+    for (const previousHash of recentHashes.slice(-5)) {
+      const isReused = await bcrypt.compare(newPassword, previousHash);
+      if (isReused) {
+        return res.status(400).json({ success: false, message: 'Please choose a password that has not been used recently.' });
+      }
+    }
+
+    user.passwordHistory = [...(user.passwordHistory || []), user.password];
+    if (user.passwordHistory.length > 5) {
+      user.passwordHistory = user.passwordHistory.slice(-5);
+    }
+    user.lastPasswordChange = new Date();
     user.password = newPassword;
     await user.save();
 

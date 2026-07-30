@@ -1,80 +1,74 @@
-/**
- * Security Middleware
- * Implements various security best practices
- * 
- * To use this middleware, install the required packages:
- * npm install helmet express-mongo-sanitize xss-clean hpp
- * 
- * Then uncomment this file and apply in app.ts
- */
+const rateLimit = require('express-rate-limit');
 
-// const helmet = require('helmet');
-// const mongoSanitize = require('express-mongo-sanitize');
-// const xss = require('xss-clean');
-// const hpp = require('hpp');
+const securityHeaders = (req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  next();
+};
 
-// /**
-//  * Security headers middleware using Helmet
-//  * Protects against common web vulnerabilities
-//  */
-// const securityHeaders = helmet({
-//   contentSecurityPolicy: {
-//     directives: {
-//       defaultSrc: ["'self'"],
-//       styleSrc: ["'self'", "'unsafe-inline'"],
-//       scriptSrc: ["'self'"],
-//       imgSrc: ["'self'", 'data:', 'https:'],
-//     },
-//   },
-//   crossOriginEmbedderPolicy: false, // Allow embedding for Swagger UI
-// });
+const requestSanitizer = (req, res, next) => {
+  const sanitize = (value: unknown): unknown => {
+    if (typeof value === 'string') {
+      return value.replace(/\0/g, '').trim();
+    }
+    if (Array.isArray(value)) {
+      return value.map(sanitize);
+    }
+    if (value && typeof value === 'object') {
+      const sanitized: Record<string, unknown> = {};
+      Object.entries(value as Record<string, unknown>).forEach(([key, child]) => {
+        if (key.startsWith('$') || key.startsWith('__')) return;
+        sanitized[key] = sanitize(child);
+      });
+      return sanitized;
+    }
+    return value;
+  };
 
-// /**
-//  * NoSQL injection prevention
-//  * Sanitizes user input to prevent MongoDB operator injection
-//  */
-// const noSqlInjectionPrevention = mongoSanitize({
-//   replaceWith: '_', // Replace prohibited characters with underscore
-// });
+  if (req.body) req.body = sanitize(req.body) as typeof req.body;
+  if (req.query) req.query = sanitize(req.query) as typeof req.query;
+  if (req.params) req.params = sanitize(req.params) as typeof req.params;
+  next();
+};
 
-// /**
-//  * XSS (Cross-Site Scripting) protection
-//  * Sanitizes user input to prevent XSS attacks
-//  */
-// const xssProtection = xss();
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many authentication attempts. Please try again later.' },
+});
 
-// /**
-//  * HTTP Parameter Pollution protection
-//  * Prevents parameter pollution attacks
-//  */
-// const parameterPollutionProtection = hpp({
-//   whitelist: ['category', 'rating', 'price', 'orderStatus'], // Allow duplicate params for these fields
-// });
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests. Please try again later.' },
+});
 
-// module.exports = {
-//   securityHeaders,
-//   noSqlInjectionPrevention,
-//   xssProtection,
-//   parameterPollutionProtection,
-// };
+const csrfProtection = (req, res, next) => {
+  const safeMethods = ['GET', 'HEAD', 'OPTIONS'];
+  if (safeMethods.includes(req.method)) return next();
 
-/**
- * USAGE in app.ts (apply before routes):
- * 
- * const {
- *   securityHeaders,
- *   noSqlInjectionPrevention,
- *   xssProtection,
- *   parameterPollutionProtection
- * } = require('./middleware/security');
- * 
- * // Apply security middleware
- * app.use(securityHeaders);
- * app.use(noSqlInjectionPrevention);
- * app.use(xssProtection);
- * app.use(parameterPollutionProtection);
- */
+  const tokenFromHeader = req.get('X-CSRF-Token');
+  const tokenFromCookie = req.cookies?.['csrf-token'];
+  if (!tokenFromHeader || !tokenFromCookie || tokenFromHeader !== tokenFromCookie) {
+    return res.status(403).json({ success: false, message: 'CSRF token missing or invalid' });
+  }
 
-// Placeholder export for TypeScript compatibility
-module.exports = {};
+  next();
+};
+
+module.exports = {
+  securityHeaders,
+  requestSanitizer,
+  authLimiter,
+  generalLimiter,
+  csrfProtection,
+};
+
 export {};
